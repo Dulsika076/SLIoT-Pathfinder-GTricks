@@ -665,14 +665,4 @@ A 25 km trail covered by 12 mesh nodes costs LKR 96,000 to deploy. The equivalen
 
 ---
 
-## License
-
-This repository is released for academic and evaluation purposes in the context of the SLIoT Challenge 2026. Commercial use, reproduction, or redistribution of the PCB design, firmware, or AI model architecture without explicit written permission from Team GTricks is not permitted.
-
-The dual-sensor fusion algorithm for wildlife detection (seismic + acoustic co-confirmation) is the subject of a provisional patent application with the National Intellectual Property Office of Sri Lanka (NIPO).
-
-For licensing inquiries, contact the team through the University of Moratuwa.
-
----
-
 *Team GTricks — University of Moratuwa — SLIoT Challenge 2026*
