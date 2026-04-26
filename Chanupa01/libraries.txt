@@ -1,4 +1,0 @@
-Adafruit MPU6050
-Adafruit BME280 Library
-Adafruit Unified Sensor
-LoRa
