@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>PATHFINDER — Command Center</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=IBM+Plex+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
+<style>
+/* ═══════════════════════════════════════════════════════
+   PATHFINDER COMMAND CENTER — Military Industrial UI
+   Palette: #080c0f base · #f0a500 amber · #e8e8e8 data
+   Typefaces: Bebas Neue (headers) · IBM Plex Mono (data)
+   No gradients. Sharp edges. Corner brackets. Grid lines.
+═══════════════════════════════════════════════════════ */
+:root {
+  --bg:        #080c0f;
+  --bg2:       #0d1318;
+  --bg3:       #111820;
+  --panel:     rgba(10,16,22,0.96);
+  --border:    rgba(240,165,0,0.20);
+  --border2:   rgba(240,165,0,0.08);
+  --accent:    #f0a500;
+  --accent-lo: rgba(240,165,0,0.12);
+  --danger:    #e03030;
+  --danger-lo: rgba(224,48,48,0.12);
+  --warn:      #e07020;
+  --text:      #c8d4d8;
+  --text-dim:  #4a6070;
+  --text-hi:   #eef4f6;
+  --ok:        #38b888;
+  --disp:      'Bebas Neue', sans-serif;
+  --mono:      'IBM Plex Mono', monospace;
+}
+
+*,*::before,*::after { box-sizing:border-box; margin:0; padding:0; }
+html,body { width:100%; height:100%; background:var(--bg); font-family:var(--mono); color:var(--text); overflow:hidden; }
+
+/* ── Canvas/Map ── */
+#map { position:fixed; inset:0; width:100%!important; height:100%!important; z-index:0; display:block; background:#080c0f; }
+.maplibregl-ctrl-bottom-left, .maplibregl-ctrl-bottom-right, .leaflet-bottom { display: none !important; }
+
+/* Beacon Marker CSS */
+.beacon-container { position: relative; width: 24px; height: 24px; }
+.beacon-core { width: 24px; height: 24px; background-color: var(--accent); border-radius: 50%; box-shadow: 0 0 15px var(--accent); border: 2px solid #000; z-index: 10; position: absolute; top: 0; left: 0; transition: background-color 0.3s, box-shadow 0.3s; }
+.beacon-ring { position: absolute; top: 12px; left: 12px; transform: translate(-50%, -50%); width: 24px; height: 24px; border-radius: 50%; border: 2px solid var(--accent); opacity: 0; pointer-events: none; }
+.alert-mode .beacon-core { background-color: var(--danger); box-shadow: 0 0 20px var(--danger); }
+.alert-mode .beacon-ring { border-color: var(--danger); animation: mapPulse 1.8s cubic-bezier(0.1, 0.8, 0.3, 1) infinite; }
+.alert-mode .beacon-ring:nth-child(2) { animation-delay: 0.6s; }
+.alert-mode .beacon-ring:nth-child(3) { animation-delay: 1.2s; }
+@keyframes mapPulse { 0% { width: 24px; height: 24px; opacity: 1; border-width: 4px; } 100% { width: 400px; height: 400px; opacity: 0; border-width: 1px; } }
+
+/* ── Grid overlay — replaces scanlines — */
+#scanlines {
+  position:fixed; inset:0; z-index:1; pointer-events:none;
+  background-image:
+    linear-gradient(rgba(240,165,0,0.018) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(240,165,0,0.018) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+
+/* ── Vignette ── */
+#vignette {
+  position:fixed; inset:0; z-index:2; pointer-events:none;
+  background:radial-gradient(ellipse at center, transparent 30%, rgba(4,7,10,0.72) 100%);
+}
+
+/* ── Alert overlay ── */
+#alert-overlay {
+  position:fixed; inset:0; z-index:210; pointer-events:none;
+  border:2px solid transparent; transition:border-color 0.2s;
+}
+#alert-overlay.on {
+  border-color:var(--danger);
+  box-shadow:inset 0 0 120px rgba(224,48,48,0.14);
+  animation:bpulse 0.6s ease-in-out 8;
+}
+@keyframes bpulse { 0%,100%{opacity:1} 50%{opacity:0.2} }
+
+/* ══════════════════════ TOP BAR ══════════════════════ */
+#topbar {
+  position:fixed; top:0; left:0; right:0; height:50px;
+  display:flex; align-items:center; justify-content:space-between;
+  padding:0 20px;
+  background:var(--bg);
+  border-bottom:1px solid var(--border);
+  z-index:100;
+}
+
+/* Corner accent marks on topbar */
+#topbar::before,#topbar::after {
+  content:''; position:absolute; bottom:-1px;
+  width:80px; height:2px; background:var(--accent);
+}
+#topbar::before { left:0; }
+#topbar::after  { right:0; }
+
+.brand {
+  font-family:var(--disp); font-size:22px; letter-spacing:0.28em;
+  color:var(--text-hi); display:flex; align-items:center; gap:14px;
+}
+.brand-tag {
+  font-family:var(--mono); font-size:9px; letter-spacing:0.18em;
+  color:var(--accent); border:1px solid var(--border);
+  padding:2px 7px; border-radius:1px;
+}
+.brand-slash { color:var(--accent); font-size:18px; opacity:0.6; }
+
+#sys-bar {
+  display:flex; align-items:center; gap:10px;
+  font-size:10px; letter-spacing:0.14em; color:var(--accent);
+  font-family:var(--mono); transition:color 0.3s;
+}
+#sys-bar.red { color:var(--danger); }
+#sys-bar.red .dot { background:var(--danger); box-shadow:0 0 8px var(--danger); }
+
+.dot {
+  width:6px; height:6px; border-radius:50%;
+  background:var(--accent); box-shadow:0 0 8px var(--accent);
+  animation:pdot 2s ease-in-out infinite; flex-shrink:0;
+}
+@keyframes pdot { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.25;transform:scale(0.5)} }
+
+.tblock { font-size:10px; letter-spacing:0.14em; color:var(--text-dim); text-align:right; line-height:1.8; }
+.tblock b { font-family:var(--disp); font-size:20px; color:var(--text-hi); display:block; letter-spacing:0.1em; font-weight:400; }
+
+/* ══════════════════════ CARD ══════════════════════ */
+/* Corner bracket decoration — military targeting style */
+.card {
+  background:var(--panel);
+  border:1px solid var(--border2);
+  padding:14px 16px;
+  position:relative;
+  backdrop-filter:blur(12px);
+  -webkit-backdrop-filter:blur(12px);
+}
+.card::before,.card::after,
+.card .cb-bl,.card .cb-br {
+  content:''; position:absolute;
+  width:10px; height:10px;
+  border-color:var(--accent); border-style:solid;
+}
+.card::before  { top:-1px;    left:-1px;  border-width:1px 0 0 1px; }
+.card::after   { top:-1px;    right:-1px; border-width:1px 1px 0 0; }
+.card .cb-bl   { bottom:-1px; left:-1px;  border-width:0 0 1px 1px; }
+.card .cb-br   { bottom:-1px; right:-1px; border-width:0 1px 1px 0; }
+
+.clabel {
+  font-family:var(--disp); font-size:11px; letter-spacing:0.3em;
+  color:var(--accent); text-transform:uppercase;
+  margin-bottom:10px; display:flex; align-items:center; gap:8px;
+}
+.clabel::after { content:''; flex:1; height:1px; background:var(--border); }
+
+/* ══════════════════════ LEFT PANEL ══════════════════════ */
+#lpanel {
+  position:fixed; top:60px; left:14px; bottom:14px;
+  width:256px; display:flex; flex-direction:column; gap:8px; z-index:50;
+}
+
+.nid {
+  font-family:var(--disp); font-size:16px; letter-spacing:0.16em;
+  color:var(--text-hi); margin-bottom:6px;
+}
+
+#badge {
+  display:inline-flex; align-items:center; gap:6px;
+  padding:3px 10px; font-size:9px; letter-spacing:0.2em;
+  font-weight:500; font-family:var(--mono); transition:all 0.3s;
+  background:rgba(56,184,136,0.10); border:1px solid var(--ok);
+  color:var(--ok);
+}
+#badge.red {
+  background:var(--danger-lo); border-color:var(--danger); color:var(--danger);
+  animation:bflash 0.4s ease-in-out 5;
+}
+@keyframes bflash { 0%,100%{opacity:1} 50%{opacity:0.15} }
+
+/* Metric rows */
+.mr {
+  display:flex; justify-content:space-between; align-items:baseline;
+  padding:5px 0; border-bottom:1px solid var(--border2);
+}
+.mr:last-child { border-bottom:none; }
+.mk { font-size:8.5px; color:var(--text-dim); letter-spacing:0.14em; }
+.mv { font-family:var(--disp); font-size:15px; color:var(--text-hi); letter-spacing:0.06em; }
+.mv .u { font-family:var(--mono); font-size:8px; color:var(--text-dim); margin-left:2px; }
+
+/* Signal bars */
+.sbars { display:flex; gap:3px; align-items:flex-end; height:15px; }
+.sbars span { width:5px; border-radius:1px; background:var(--accent); opacity:0.12; transition:opacity 0.4s; }
+.sbars span.on { opacity:1; box-shadow:0 0 4px var(--accent); }
+
+/* Sparkline */
+#sparkcv { width:100%; height:44px; display:block; margin-top:10px; opacity:0.85; }
+
+/* ══════════════════════ BUTTONS ══════════════════════ */
+#btns { display:flex; flex-direction:column; gap:6px; margin-top:auto; }
+
+.btn {
+  width:100%; padding:10px 14px;
+  background:transparent; border:1px solid var(--border2);
+  color:var(--text); font-family:var(--mono); font-size:9.5px;
+  letter-spacing:0.16em; cursor:pointer; text-align:left;
+  transition:background 0.15s, border-color 0.15s, color 0.15s;
+  display:flex; align-items:center; gap:10px;
+  text-transform:uppercase;
+}
+.btn:hover { border-color:var(--accent); color:var(--text-hi); background:var(--accent-lo); }
+.btn.sos   { border-color:rgba(224,112,32,0.35); color:var(--warn); }
+.btn.sos:hover { border-color:var(--warn); background:rgba(224,112,32,0.10); }
+.btn.seis  { border-color:rgba(224,48,48,0.35); color:var(--danger); }
+.btn.seis:hover { border-color:var(--danger); background:var(--danger-lo); }
+
+/* ══════════════════════ RIGHT PANEL ══════════════════════ */
+#rpanel {
+  position:fixed; top:60px; right:14px; width:278px; z-index:50;
+  display:flex; flex-direction:column; gap:8px;
+}
+
+#elog {
+  overflow-y:auto; max-height:560px;
+  scrollbar-width:thin; scrollbar-color:var(--border2) transparent;
+}
+
+.le {
+  display:flex; gap:8px; padding:5px 0;
+  border-bottom:1px solid var(--border2);
+  font-size:9px; line-height:1.6;
+  animation:lin 0.2s ease-out;
+}
+@keyframes lin { from{opacity:0;transform:translateX(6px)} to{opacity:1;transform:none} }
+.lts { color:var(--text-dim); white-space:nowrap; min-width:52px; font-size:8.5px; }
+.lm { color:var(--text); }
+.le.w  .lm { color:var(--warn); }
+.le.d  .lm { color:var(--danger); }
+.le.ok .lm { color:var(--ok); }
+
+/* ══════════════════════ STATUS STRIP ══════════════════════ */
+/* Bottom status bar */
+#status-strip {
+  position:fixed; bottom:0; left:0; right:0; height:28px;
+  background:var(--bg); border-top:1px solid var(--border);
+  display:flex; align-items:center; justify-content:space-between;
+  padding:0 20px; z-index:50;
+}
+.sstrip-item {
+  font-size:8.5px; letter-spacing:0.18em; color:var(--text-dim);
+  display:flex; align-items:center; gap:7px;
+}
+.sstrip-item .val { color:var(--text); }
+
+/* ══════════════════════ BOTTOM LABELS ══════════════════════ */
+#coords {
+  position:fixed; bottom:36px; left:50%; transform:translateX(-50%);
+  z-index:50; font-size:9.5px; letter-spacing:0.16em; color:var(--text-dim);
+  background:var(--panel); border:1px solid var(--border2);
+  padding:5px 18px;
+}
+#minfo {
+  position:fixed; bottom:36px; left:14px; z-index:50;
+  font-size:8.5px; color:var(--text-dim); letter-spacing:0.12em; line-height:2;
+}
+
+/* ══════════════════════ COMPASS ══════════════════════ */
+#compass { position:fixed; bottom:36px; right:14px; width:62px; height:62px; z-index:50; }
+#compass svg { width:100%; height:100%; }
+
+/* ══════════════════════ ERROR BANNER ══════════════════════ */
+#err-banner {
+  display:none; position:fixed; top:58px; left:50%; transform:translateX(-50%);
+  background:var(--danger-lo); border:1px solid var(--danger); border-radius:0;
+  padding:10px 24px; font-size:10px; color:var(--danger);
+  letter-spacing:0.14em; z-index:300; text-align:center;
+}
+
+/* ══════════════════════ SECTION DIVIDERS ══════════════════════ */
+.sec-line {
+  width:100%; height:1px; background:var(--border);
+  position:relative; margin:2px 0;
+}
+.sec-line::before {
+  content:''; position:absolute; top:-1px; left:0;
+  width:30px; height:3px; background:var(--accent);
+}
+</style>
+</head>
+<body>
+
+<div id="map"></div>
+<div id="scanlines"></div>
+<div id="vignette"></div>
+<div id="alert-overlay"></div>
+<div id="err-banner">⚠ WEBGL UNAVAILABLE — 3D TERRAIN OFFLINE</div>
+
+<!-- TOP BAR -->
+<div id="topbar">
+  <div class="brand">
+    PATHFINDER
+    <span class="brand-slash">/</span>
+    COMMAND
+    <span class="brand-tag">CLASS-A · SECURE</span>
+  </div>
+  <div id="sys-bar">
+    <div class="dot"></div>
+    <span id="sys-txt">SYSTEM NOMINAL &nbsp;·&nbsp; BASE-STATION ACTIVE</span>
+  </div>
+  <div class="tblock">
+    <b id="clk">--:--:--</b>
+    <span id="dstr">LOADING</span>
+  </div>
+</div>
+
+<!-- LEFT PANEL -->
+<div id="lpanel">
+
+  <!-- Node identity card -->
+  <div class="card">
+    <span class="cb-bl"></span><span class="cb-br"></span>
+    <div class="clabel">Active Node</div>
+    <div class="nid">PF-KNUCKLES-01</div>
+    <div style="margin:5px 0 12px"><span id="badge">● SECURE</span></div>
+    <div class="sec-line"></div>
+    <div style="margin-top:10px">
+      <div class="mr"><span class="mk">TEMPERATURE</span><span class="mv" id="tv">28.4<span class="u">°C</span></span></div>
+      <div class="mr"><span class="mk">HUMIDITY</span>   <span class="mv" id="hv">71<span class="u">%</span></span></div>
+      <div class="mr"><span class="mk">ALTITUDE</span>   <span class="mv">1,247<span class="u">m</span></span></div>
+      <div class="mr"><span class="mk">PRESSURE</span>   <span class="mv" id="pv">1013.2<span class="u">hPa</span></span></div>
+      <div class="mr"><span class="mk">UPTIME</span>     <span class="mv" id="upt">00:00:00</span></div>
+    </div>
+  </div>
+
+  <!-- Radio card -->
+  <div class="card">
+    <span class="cb-bl"></span><span class="cb-br"></span>
+    <div class="clabel">Radio Link</div>
+    <div class="mr"><span class="mk">RSSI</span><span class="mv" id="rsv">-74<span class="u">dBm</span></span></div>
+    <div class="mr"><span class="mk">SNR</span> <span class="mv" id="snv">+9.2<span class="u">dB</span></span></div>
+    <div class="mr"><span class="mk">FREQ</span><span class="mv">433.0<span class="u">MHz</span></span></div>
+    <div class="mr" style="padding-top:8px;border-bottom:none">
+      <span class="mk">SIGNAL STR</span>
+      <div class="sbars" id="sbars">
+        <span style="height:4px"  class="on"></span>
+        <span style="height:7px"  class="on"></span>
+        <span style="height:10px" class="on"></span>
+        <span style="height:13px" class="on"></span>
+        <span style="height:16px"></span>
+      </div>
+    </div>
+    <canvas id="sparkcv"></canvas>
+  </div>
+
+  <!-- Packets card -->
+  <div class="card">
+    <span class="cb-bl"></span><span class="cb-br"></span>
+    <div class="clabel">Packets</div>
+    <div class="mr"><span class="mk">RECEIVED</span><span class="mv" id="prx">0</span></div>
+    <div class="mr"><span class="mk">LAST RX</span><span class="mv" id="plast" style="font-size:12px">--:--:--</span></div>
+  </div>
+
+  <!-- Controls -->
+  <div id="btns">
+    <button class="btn sos"  onclick="simSOS()">     <span>⚠</span> SIMULATE SOS PACKET</button>
+    <button class="btn seis" onclick="simSeismic()"> <span>⚡</span> SIMULATE SEISMIC ALERT</button>
+    <button class="btn"      onclick="simHeartbeat()"><span>◈</span> SIMULATE HEARTBEAT</button>
+  </div>
+
+</div>
+
+<!-- RIGHT PANEL — EVENT LOG -->
+<div id="rpanel">
+  <div class="card" style="flex:1">
+    <span class="cb-bl"></span><span class="cb-br"></span>
+    <div class="clabel">Event Log</div>
+    <div id="elog"></div>
+  </div>
+</div>
+
+<!-- BOTTOM STATUS STRIP -->
+<div id="status-strip">
+  <div class="sstrip-item">ZONE <span class="val">KNUCKLES RANGE, SRI LANKA</span></div>
+  <div class="sstrip-item">DRAG TO ROTATE &nbsp;·&nbsp; SCROLL TO ZOOM</div>
+  <div class="sstrip-item">PROTOCOL <span class="val">LoRa 433MHz SF7</span></div>
+</div>
+
+<!-- COORDS -->
+<div id="coords">6°47'22"N &nbsp;·&nbsp; 80°44'05"E &nbsp;·&nbsp; ELV 1247m</div>
+<div id="minfo"></div>
+
+<!-- COMPASS -->
+<div id="compass">
+  <svg viewBox="0 0 70 70" fill="none">
+    <circle cx="35" cy="35" r="31" stroke="rgba(240,165,0,0.18)" stroke-width="1"/>
+    <circle cx="35" cy="35" r="24" stroke="rgba(240,165,0,0.08)" stroke-width="0.5"/>
+    <!-- tick marks -->
+    <line x1="35" y1="4"  x2="35" y2="10" stroke="rgba(240,165,0,0.35)" stroke-width="1"/>
+    <line x1="35" y1="60" x2="35" y2="66" stroke="rgba(240,165,0,0.20)" stroke-width="1"/>
+    <line x1="4"  y1="35" x2="10" y2="35" stroke="rgba(240,165,0,0.20)" stroke-width="1"/>
+    <line x1="60" y1="35" x2="66" y2="35" stroke="rgba(240,165,0,0.20)" stroke-width="1"/>
+    <!-- needle -->
+    <polygon points="35,9 31,35 35,30 39,35"  fill="#e03030" opacity="0.95"/>
+    <polygon points="35,61 31,35 35,40 39,35" fill="rgba(240,165,0,0.4)"/>
+    <circle cx="35" cy="35" r="2.5" fill="var(--accent)" stroke="#080c0f" stroke-width="1.5"/>
+    <!-- labels -->
+    <text x="35" y="5"  text-anchor="middle" fill="#e03030"             font-size="6.5" font-family="'IBM Plex Mono',monospace" font-weight="700">N</text>
+    <text x="35" y="68" text-anchor="middle" fill="rgba(240,165,0,0.5)" font-size="6.5" font-family="'IBM Plex Mono',monospace">S</text>
+    <text x="66" y="38" text-anchor="middle" fill="rgba(240,165,0,0.5)" font-size="6.5" font-family="'IBM Plex Mono',monospace">E</text>
+    <text x="4"  y="38" text-anchor="middle" fill="rgba(240,165,0,0.5)" font-size="6.5" font-family="'IBM Plex Mono',monospace">W</text>
+  </svg>
+</div>
+
+<!-- ═══════════════════════ SCRIPTS ═══════════════════════ -->
+
+<!-- MapLibre & Leaflet libraries -->
+<script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
+<link href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css" rel="stylesheet" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<link href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" rel="stylesheet" />
+
+<script>
+(function(){
+  window.onload = function() { setTimeout(initMap, 100); };
+
+  // Socket.IO — silent fail if not available
+  var sio = document.createElement('script');
+  sio.src = 'https://unpkg.com/socket.io-client@4.0.1/dist/socket.io.min.js';
+  sio.onload  = function(){ window._sioReady = true; };
+  sio.onerror = function(){ window._sioReady = false; };
+  document.head.appendChild(sio);
+})();
+</script>
+
+<!-- UI logic (no Three.js dependency) -->
+<script>
+/* ── Clock ─────────────────────────────── */
+var _t0 = Date.now();
+function tick(){
+  var n=new Date();
+  document.getElementById('clk').textContent  = n.toTimeString().slice(0,8);
+  document.getElementById('dstr').textContent = n.toDateString().toUpperCase();
+  var s=Math.floor((Date.now()-_t0)/1000);
+  document.getElementById('upt').textContent  =
+    [Math.floor(s/3600),Math.floor((s%3600)/60),s%60].map(function(x){return String(x).padStart(2,'0')}).join(':');
+}
+setInterval(tick,1000); tick();
+
+/* ── Sparkline ──────────────────────────── */
+var _rh=[]; for(var _ri=0;_ri<42;_ri++) _rh.push(-90);
+var _sc=document.getElementById('sparkcv'), _sx=_sc.getContext('2d');
+function drawSpark(){
+  var W=_sc.offsetWidth||228, H=_sc.offsetHeight||46;
+  _sc.width=W; _sc.height=H;
+  var mn=-120,mx=-38;
+  _sx.clearRect(0,0,W,H);
+  _sx.strokeStyle='rgba(240,165,0,0.08)'; _sx.lineWidth=0.5;
+  for(var gi=0;gi<=3;gi++){var gy=gi/3*H;_sx.beginPath();_sx.moveTo(0,gy);_sx.lineTo(W,gy);_sx.stroke();}
+  var gr=_sx.createLinearGradient(0,0,0,H);
+  gr.addColorStop(0,'rgba(240,165,0,0.32)');gr.addColorStop(1,'rgba(240,165,0,0)');
+  _sx.beginPath();
+  _rh.forEach(function(v,i){
+    var x=i/(_rh.length-1)*W,y=H-((v-mn)/(mx-mn))*H;
+    i===0?_sx.moveTo(x,y):_sx.lineTo(x,y);
+  });
+  _sx.lineTo(W,H);_sx.lineTo(0,H);_sx.closePath();_sx.fillStyle=gr;_sx.fill();
+  _sx.beginPath();
+  _rh.forEach(function(v,i){
+    var x=i/(_rh.length-1)*W,y=H-((v-mn)/(mx-mn))*H;
+    i===0?_sx.moveTo(x,y):_sx.lineTo(x,y);
+  });
+  _sx.strokeStyle='#f0a500';_sx.lineWidth=1.6;_sx.stroke();
+}
+function pushRssi(v){_rh.push(v);_rh.shift();drawSpark();}
+drawSpark();
+window.addEventListener('resize',drawSpark);
+
+/* ── Shared state ───────────────────────── */
+var _alert=false, _pkt=0, _atimer=null;
+var _bRef=null, _blRef=null, _gdRef=null, _nRings=[], _aRings=[];
+
+/* ── Log ────────────────────────────────── */
+function log(msg,cls){
+  var el=document.createElement('div'); el.className='le '+(cls||'');
+  el.innerHTML='<span class="lts">'+new Date().toTimeString().slice(0,8)+'</span><span class="lm">'+msg+'</span>';
+  var box=document.getElementById('elog');
+  box.insertBefore(el,box.firstChild);
+  if(box.children.length>80)box.removeChild(box.lastChild);
+}
+
+/* ── Bars ───────────────────────────────── */
+function updateBars(r){
+  var b=document.querySelectorAll('#sbars span');
+  var lv=Math.max(1,Math.min(5,Math.round((-r-38)/15)));
+  b.forEach(function(x,i){x.classList.toggle('on',i<lv);});
+}
+
+/* ── Alert ──────────────────────────────── */
+function setAlert(on,label){
+  _alert=on;
+  var badge=document.getElementById('badge'),ovl=document.getElementById('alert-overlay'),
+      sb=document.getElementById('sys-bar'),st=document.getElementById('sys-txt');
+  if(on){
+    badge.className='red'; badge.textContent='● '+(label||'ALERT');
+    ovl.className='on'; sb.className='red';
+    st.textContent='⚠ ALERT ACTIVE — '+(label||'ALERT');
+    if(window._beaconEl) window._beaconEl.classList.add('alert-mode');
+  } else {
+    badge.className=''; badge.textContent='● SECURE';
+    ovl.className=''; sb.className='';
+    st.textContent='SYSTEM NOMINAL · BASE-STATION ACTIVE';
+    if(window._beaconEl) window._beaconEl.classList.remove('alert-mode');
+  }
+}
+
+/* ── Packet common ──────────────────────── */
+function pktCommon(r){
+  _pkt++;
+  document.getElementById('prx').textContent=_pkt;
+  document.getElementById('plast').textContent=new Date().toTimeString().slice(0,8);
+  document.getElementById('rsv').innerHTML=r+'<span class="u">dBm</span>';
+  updateBars(r); pushRssi(r);
+}
+
+/* ── Simulations ────────────────────────── */
+function simSOS(){
+  var r=-(60+Math.floor(Math.random()*30)); pktCommon(r);
+  setAlert(true,'SOS ACTIVE');
+  log('⚠ HARDWARE_SOS_TRIGGERED','d');
+  log('  Node: PF-KNUCKLES-01','w');
+  log('  Payload: DISTRESS SIGNAL','w');
+  log('  RSSI: '+r+' dBm','w');
+  clearTimeout(_atimer); _atimer=setTimeout(function(){setAlert(false);},9000);
+}
+function simSeismic(){
+  var r=-(50+Math.floor(Math.random()*25)); pktCommon(r);
+  setAlert(true,'SEISMIC ALERT');
+  log('⚡ SEISMIC_ANOMALY_DETECTED','d');
+  log('  Magnitude est: 3.'+Math.floor(Math.random()*9),'w');
+  log('  Sensor: ACCELEROMETER','w');
+  clearTimeout(_atimer); _atimer=setTimeout(function(){setAlert(false);},9000);
+}
+function simHeartbeat(){
+  var r=-(68+Math.floor(Math.random()*20));
+  var temp=(26+Math.random()*6).toFixed(1), hum=Math.floor(65+Math.random()*20);
+  pktCommon(r);
+  document.getElementById('tv').innerHTML=temp+'<span class="u">°C</span>';
+  document.getElementById('hv').innerHTML=hum+'<span class="u">%</span>';
+  log('📡 HEARTBEAT_OK','ok');
+  log('  Temp: '+temp+'°C  Hum: '+hum+'%');
+}
+
+/* ── Initial log ────────────────────────── */
+log('BASE_STATION_ONLINE','ok');
+log('LoRa init: 433.0 MHz  SF7  BW125');
+log('Awaiting packet from PF-KNUCKLES-01');
+</script>
+
+<!-- 3D Scene / MapLibre / Leaflet -->
+<script>
+function initMap(){
+  var centerCoords = [80.7347, 6.7894]; /* Knuckles range [lng, lat] */
+  
+  // Create Beacon HTML Element
+  var beaconEl = document.createElement('div');
+  beaconEl.className = 'beacon-container';
+  beaconEl.innerHTML = '<div class="beacon-ring"></div><div class="beacon-ring"></div><div class="beacon-ring"></div><div class="beacon-core"></div>';
+  window._beaconEl = beaconEl;
+
+  var isWebGLSupported = false;
+  try {
+    var canvas = document.createElement('canvas');
+    isWebGLSupported = !!(window.WebGLRenderingContext && 
+      (canvas.getContext('webgl') || canvas.getContext('experimental-webgl')));
+  } catch(e) {}
+
+  if(isWebGLSupported && window.maplibregl) {
+    console.log('✅ WebGL supported. Initialising MapLibre 3D Terrain.');
+    var map = new maplibregl.Map({
+      container: 'map',
+      style: {
+        version: 8,
+        sources: {
+          'esri-satellite': {
+            type: 'raster',
+            tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'],
+            tileSize: 256,
+            attribution: 'Esri Satellite'
+          },
+          'terrain-tiles': {
+            type: 'raster-dem',
+            tiles: ['https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'],
+            encoding: 'terrarium',
+            tileSize: 256,
+            maxzoom: 14
+          }
+        },
+        layers: [{
+          id: 'satellite-layer',
+          type: 'raster',
+          source: 'esri-satellite',
+          minzoom: 0, maxzoom: 19
+        }],
+        terrain: { source: 'terrain-tiles', exaggeration: 1.8 }
+      },
+      center: centerCoords,
+      zoom: 13.5,
+      pitch: 62,
+      bearing: 45
+    });
+    
+    new maplibregl.Marker({element: beaconEl})
+      .setLngLat(centerCoords)
+      .addTo(map);
+      
+    // Removed automatic camera rotation to allow free manual drag and zoom
+
+
+  } else if (window.L) {
+    console.warn('⚠ WebGL not available or MapLibre failed. Falling back to Leaflet 2D Map.');
+    document.getElementById('err-banner').style.display='block';
+    document.getElementById('err-banner').innerText = '⚠ WEBGL UNAVAILABLE — FALLBACK TO 2D SATELLITE';
+    
+    var map = L.map('map', {zoomControl: false}).setView([centerCoords[1], centerCoords[0]], 15);
+    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+      maxZoom: 19
+    }).addTo(map);
+
+    var customIcon = L.divIcon({
+      className: 'custom-leaflet-marker',
+      html: beaconEl.outerHTML,
+      iconSize: [24, 24],
+      iconAnchor: [12, 12]
+    });
+    
+    var marker = L.marker([centerCoords[1], centerCoords[0]], {icon: customIcon}).addTo(map);
+    setTimeout(function() {
+      window._beaconEl = document.querySelector('.beacon-container');
+    }, 500);
+  }
+
+  function connectSocket(){
+    if(typeof io==='undefined') return;
+    var sk=io();
+    sk.on('connect',    function(){log('SOCKET_CONNECTED','ok');});
+    sk.on('disconnect', function(){log('SOCKET_DISCONNECTED','w');});
+    sk.on('new_lora_packet',function(data){
+      if(data.status){log(data.status,'ok');return;}
+      if(data.type==='alert'){
+        var r=parseInt(data.rssi)||(-80); pktCommon(r);
+        var pl=(data.payload||'').toUpperCase();
+        if(pl.indexOf('SOS')>=0){
+          setAlert(true,'SOS ACTIVE');log('⚠ '+pl,'d');
+        } else if(pl.indexOf('SEISMIC')>=0||pl.indexOf('AI_')>=0||pl.indexOf('ELEPHANT')>=0){
+          setAlert(true,'TARGET DETECTED');log('⚡ '+pl,'d');
+        } else {
+          log('📶 '+pl,'w');
+        }
+        log('  RSSI: '+r+' dBm','w');
+        clearTimeout(_atimer); _atimer=setTimeout(function(){setAlert(false);},9000);
+      }
+    });
+  }
+  setTimeout(connectSocket,1200);
+}
+</script>
+
+</body>
+</html>
