@@ -111,7 +111,7 @@ The node is the field-deployed unit mounted on a post at the trail location. It 
 | INMP441 | I2S MEMS microphone, −26 dBFS, SNR 61 dB | Acoustic wildlife detection |
 | RGB LED | Common cathode, 5 mm diffused | Visual status indicator |
 | SOS Push Button | Momentary N/O, IP67-rated, 22 mm yellow cap | Physical emergency trigger |
-| Custom PCB | 0.6 mm tracks, 1.0 mm safety clearance, 2-layer FR4 | Structural integration |
+| Custom PCB | 1.5 mm tracks, 1.5 mm safety clearance, Single-layer FR4 | Structural integration |
 | 433 MHz Antenna | SMA stubby, 3 dBi, IP65 | RF transmission |
 
 **PCB Pin Mapping (from schematic):**
@@ -169,9 +169,9 @@ The base station is deployed at the ranger post, base camp, or monitoring centre
 
 The custom PCB was designed for environmental durability in field conditions:
 
-- 0.6 mm copper track width for signal integrity
-- 1.0 mm safety clearance between power and signal traces
-- 2-layer FR4 substrate
+- 1.5 mm copper track width for signal integrity
+- 1.5 mm safety clearance between power and signal traces
+- Single-layer FR4 substrate
 - SMA bulkhead connector with silicone O-ring for antenna sealing
 - Designed to be mounted inside a 3D-printed PLA+ enclosure (prototype) or IP65-rated ABS injection-moulded enclosure (production)
 
